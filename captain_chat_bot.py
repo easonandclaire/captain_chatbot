@@ -92,21 +92,45 @@ def push_reminder():
     if today == reminder_date.date():
         flex_message = FlexSendMessage(
             alt_text="今天隊長要吃犬新寶！",
-            contents=BubbleContainer(
-                body=BoxComponent(
-                    layout="vertical",
-                    contents=[
-                        TextComponent(text="今天隊長要吃犬新寶！", weight="bold", size="xl"),
-                        BoxComponent(
-                            layout="horizontal",
-                            contents=[
-                                PostbackAction(label="完成", data="action=completed"),
-                                PostbackAction(label="今天忘記了，明天再提醒一次", data="action=postpone")
+            contents={
+                "type": "bubble",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "今天隊長要吃犬新寶！",
+                            "weight": "bold",
+                            "size": "xl"
+                        },
+                        {
+                            "type": "box",
+                            "layout": "horizontal",
+                            "contents": [
+                                {
+                                    "type": "button",
+                                    "action": {
+                                        "type": "postback",
+                                        "label": "完成",
+                                        "data": "action=completed"
+                                    },
+                                    "style": "primary"
+                                },
+                                {
+                                    "type": "button",
+                                    "action": {
+                                        "type": "postback",
+                                        "label": "今天忘記了，明天再提醒一次",
+                                        "data": "action=postpone"
+                                    },
+                                    "style": "secondary"
+                                }
                             ]
-                        )
+                        }
                     ]
-                )
-            )
+                }
+            }
         )
         # 推送訊息給所有群組或聊天室
         for target_id in ['Cf1695ceb1fb06c8942f0aace132c749c']:
