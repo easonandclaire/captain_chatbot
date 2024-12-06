@@ -4,6 +4,13 @@ from linebot.exceptions import InvalidSignatureError
 from linebot.models import JoinEvent, MessageEvent, PostbackEvent, TextSendMessage, FlexSendMessage, PostbackAction, BubbleContainer, BoxComponent, TextComponent
 import os
 from datetime import datetime, timedelta
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,  # 設置日誌級別（可選 DEBUG, INFO, WARNING, ERROR, CRITICAL）
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 # 初始化 Flask
 app = Flask(__name__)
@@ -39,20 +46,20 @@ def callback():
 target_ids = []
 @handler.add(JoinEvent)
 def handle_join(event):
-    print("JoinEvent received - starting to process")
+    app.logger.info("JoinEvent received - starting to process")
     if event.source.type == "group":
         group_id = event.source.group_id
         if group_id not in target_ids:
             target_ids.append(group_id)
-            print(f"加入群組，群組 ID: {group_id}")
+            app.logger.info(f"加入群組，群組 ID: {group_id}")
     elif event.source.type == "room":
         room_id = event.source.room_id
         if room_id not in target_ids:
             target_ids.append(room_id)
-            print(f"加入聊天室，聊天室 ID: {room_id}")
+            app.logger.info(f"加入聊天室，聊天室 ID: {room_id}")
     else:
-        print(f'type: {event.source.type}')
-        print(f'event: {event}')
+        app.logger.info(f'type: {event.source.type}')
+        app.logger.info(f'event: {event}')
     # 回覆訊息
     line_bot_api.reply_message(
         event.reply_token,
@@ -68,13 +75,13 @@ def handle_message(event):
     # 判斷來源類型
     if source.type == "user":
         target_id = source.user_id
-        print(f"獲取到用戶 ID: {target_id}")
+        app.logger.info(f"獲取到用戶 ID: {target_id}")
     elif source.type == "group":
         target_id = source.group_id
-        print(f"獲取到群組 ID: {target_id}")
+        app.logger.info(f"獲取到群組 ID: {target_id}")
     elif source.type == "room":
         target_id = source.room_id
-        print(f"獲取到聊天室 ID: {target_id}")
+        app.logger.info(f"獲取到聊天室 ID: {target_id}")
 
     # 如果獲取到 ID，且尚未在 target_ids 中，將其加入
     if target_id and target_id not in target_ids:
@@ -114,9 +121,9 @@ def push_reminder():
         for target_id in target_ids:
             try:
                 line_bot_api.push_message(target_id, flex_message)
-                print(f"訊息已成功推送到目標 ID: {target_id}")
+                app.logger.info(f"訊息已成功推送到目標 ID: {target_id}")
             except Exception as e:
-                print(f"推送到目標 ID {target_id} 失敗，原因: {e}")
+                app.logger.info(f"推送到目標 ID {target_id} 失敗，原因: {e}")
         return "提醒已發送！"
     return "今天不是提醒日！"
 
