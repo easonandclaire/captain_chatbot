@@ -39,15 +39,20 @@ def callback():
 target_ids = []
 @handler.add(JoinEvent)
 def handle_join(event):
+    print("JoinEvent received - starting to process")
     if event.source.type == "group":
         group_id = event.source.group_id
-        target_ids.append(group_id)
-        print(f"加入群組，群組 ID: {group_id}")
+        if group_id not in target_ids:
+            target_ids.append(group_id)
+            print(f"加入群組，群組 ID: {group_id}")
     elif event.source.type == "room":
         room_id = event.source.room_id
-        target_ids.append(room_id)
-        print(f"加入聊天室，聊天室 ID: {room_id}")
-
+        if room_id not in target_ids:
+            target_ids.append(room_id)
+            print(f"加入聊天室，聊天室 ID: {room_id}")
+    else:
+        print(f'type: {event.source.type}')
+        print(f'event: {event}')
     # 回覆訊息
     line_bot_api.reply_message(
         event.reply_token,
