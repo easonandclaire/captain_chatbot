@@ -59,6 +59,31 @@ def handle_join(event):
         TextSendMessage(text="感謝邀請我加入！")
     )
 
+@handler.add(MessageEvent)
+def handle_message(event):
+    # 獲取事件的來源
+    source = event.source
+    target_id = None
+
+    # 判斷來源類型
+    if source.type == "user":
+        target_id = source.user_id
+        print(f"獲取到用戶 ID: {target_id}")
+    elif source.type == "group":
+        target_id = source.group_id
+        print(f"獲取到群組 ID: {target_id}")
+    elif source.type == "room":
+        target_id = source.room_id
+        print(f"獲取到聊天室 ID: {target_id}")
+
+    # 如果獲取到 ID，且尚未在 target_ids 中，將其加入
+    if target_id and target_id not in target_ids:
+        target_ids.append(target_id)
+
+    # 可以回覆用戶的訊息，確認收到
+    reply = TextSendMessage(text="感謝你的訊息！我們已記錄你的 ID。")
+    line_bot_api.reply_message(event.reply_token, reply)
+
 # 定期提醒訊息推送
 @app.route("/push_reminder", methods=['GET'])
 def push_reminder():
