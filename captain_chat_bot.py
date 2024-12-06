@@ -1,7 +1,7 @@
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, PostbackEvent, TextSendMessage, FlexSendMessage, PostbackAction, BubbleContainer, BoxComponent, TextComponent
+from linebot.models import JoinEvent, MessageEvent, PostbackEvent, TextSendMessage, FlexSendMessage, PostbackAction, BubbleContainer, BoxComponent, TextComponent
 import os
 from datetime import datetime, timedelta
 
@@ -36,6 +36,24 @@ def callback():
 
     return 'OK'
 
+target_ids = []
+@handler.add(JoinEvent)
+def handle_join(event):
+    if event.source.type == "group":
+        group_id = event.source.group_id
+        target_ids.append(group_id)
+        print(f"加入群組，群組 ID: {group_id}")
+    elif event.source.type == "room":
+        room_id = event.source.room_id
+        target_ids.append(room_id)
+        print(f"加入聊天室，聊天室 ID: {room_id}")
+
+    # 回覆訊息
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text="感謝邀請我加入！")
+    )
+
 # 定期提醒訊息推送
 @app.route("/push_reminder", methods=['GET'])
 def push_reminder():
@@ -62,8 +80,13 @@ def push_reminder():
                 )
             )
         )
-        # 群組 ID 或用戶 ID 替換為實際目標
-        line_bot_api.push_message("你的群組ID或用戶ID", flex_message)
+        # 推送訊息給所有群組或聊天室
+        for target_id in target_ids:
+            try:
+                line_bot_api.push_message(target_id, flex_message)
+                print(f"訊息已成功推送到目標 ID: {target_id}")
+            except Exception as e:
+                print(f"推送到目標 ID {target_id} 失敗，原因: {e}")
         return "提醒已發送！"
     return "今天不是提醒日！"
 
