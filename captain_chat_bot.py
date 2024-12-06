@@ -159,14 +159,14 @@ def handle_postback(event):
         reply = f"已完成用藥提醒！下次提醒時間為：{reminder_date.strftime('%Y-%m-%d')}"
         # 安排下一次提醒任務（3個月後）
         run_date = datetime.now() + timedelta(days=90)
-        scheduler.add_job(push_reminder, 'date', run_date=run_date, args=[target_id])
+        scheduler.add_job(push_reminder, 'date', run_date=run_date)
         app.logger.info(f"已安排 3 個月後的提醒，時間：{run_date}")
     elif data == "action=postpone":
         reminder_date += timedelta(seconds=5)  # 加一天
         reply = f"提醒已延後，下次提醒時間為：{reminder_date.strftime('%Y-%m-%d')}"
         # 使用 APScheduler 在 5 秒後安排推送提醒任務
         run_date = datetime.now() + timedelta(seconds=5)
-        scheduler.add_job(push_reminder, 'date', run_date=run_date, args=[target_id])
+        scheduler.add_job(push_reminder, 'date', run_date=run_date)
         app.logger.info(f"已安排延後的提醒，時間：{run_date}")
     else:
         reply = "未知操作，請重新選擇。"
