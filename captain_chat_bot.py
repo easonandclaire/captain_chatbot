@@ -152,7 +152,7 @@ def handle_postback(event):
         reminder_date += timedelta(days=90)  # 加三個月
         reply = f"已完成用藥提醒！下次提醒時間為：{reminder_date.strftime('%Y-%m-%d')}"
     elif data == "action=postpone":
-        reminder_date += timedelta(days=1)  # 加一天
+        reminder_date += timedelta(seconds=5)  # 加一天
         reply = f"提醒已延後，下次提醒時間為：{reminder_date.strftime('%Y-%m-%d')}"
     else:
         reply = "未知操作，請重新選擇。"
