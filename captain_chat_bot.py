@@ -43,20 +43,15 @@ def callback():
 
     return 'OK'
 
-target_ids = []
 @handler.add(JoinEvent)
 def handle_join(event):
     app.logger.info("JoinEvent received - starting to process")
     if event.source.type == "group":
         group_id = event.source.group_id
-        if group_id not in target_ids:
-            target_ids.append(group_id)
-            app.logger.info(f"加入群組，群組 ID: {group_id}")
+        app.logger.info(f"加入群組，群組 ID: {group_id}")
     elif event.source.type == "room":
         room_id = event.source.room_id
-        if room_id not in target_ids:
-            target_ids.append(room_id)
-            app.logger.info(f"加入聊天室，聊天室 ID: {room_id}")
+        app.logger.info(f"加入聊天室，聊天室 ID: {room_id}")
     else:
         app.logger.info(f'type: {event.source.type}')
         app.logger.info(f'event: {event}')
@@ -82,10 +77,6 @@ def handle_message(event):
     elif source.type == "room":
         target_id = source.room_id
         app.logger.info(f"獲取到聊天室 ID: {target_id}")
-
-    # 如果獲取到 ID，且尚未在 target_ids 中，將其加入
-    if target_id and target_id not in target_ids:
-        target_ids.append(target_id)
 
     # 可以回覆用戶的訊息，確認收到
     reply = TextSendMessage(text="感謝你的訊息！我們已記錄你的 ID。")
@@ -118,7 +109,7 @@ def push_reminder():
             )
         )
         # 推送訊息給所有群組或聊天室
-        for target_id in target_ids:
+        for target_id in ['Cf1695ceb1fb06c8942f0aace132c749c']:
             try:
                 line_bot_api.push_message(target_id, flex_message)
                 app.logger.info(f"訊息已成功推送到目標 ID: {target_id}")
