@@ -5,7 +5,7 @@ from linebot.models import *
 import os, re
 from datetime import datetime, timedelta
 import logging
-from type import Status
+from type import Status, UserInput
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 
@@ -77,7 +77,7 @@ def handle_message(event):
 
     if status in [Status['normal'], Status['no_reminder_time']]:
         # 檢查是否為"重設提醒時間"
-        if user_input == "重設提醒時間":
+        if user_input == UserInput[Status['reset_time']]:
             line_bot_api.reply_message(
                 event.reply_token,
                 TextSendMessage(text="好的，請問想修改成什麼日子？輸入格式為 \"YYYY/MM/DD\""))
@@ -118,6 +118,15 @@ def handle_message(event):
                 event.reply_token,
                 TextSendMessage(text="請輸入有效的數字，表示要延後的天數。"))
             return
+    elif status == UserInput[Status['query_reminder']]:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=f"目前提醒時間為 {reminder_date.strftime('%Y/%m/%d')} 早上 8 點"))
+        return
+    else:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="目前的有效指令為：\n1. 重設提醒時間\n2. 查詢提醒時間"))
 
 def check_reminder():
     global reminder_date
@@ -159,7 +168,7 @@ def handle_postback(event):
 if __name__ == "__main__":
     # 初始化 APScheduler
     scheduler = BackgroundScheduler()
-    scheduler.add_job(check_reminder, 'interval', days=1, start_date=datetime.now().replace(hour=15, minute=42, second=0))
+    scheduler.add_job(check_reminder, 'interval', days=1, start_date=datetime.now().replace(hour=15, minute=52, second=30))
     scheduler.start()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
