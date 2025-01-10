@@ -1,11 +1,13 @@
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import JoinEvent, MessageEvent, PostbackEvent, TextSendMessage, FlexSendMessage, PostbackAction, BubbleContainer, BoxComponent, TextComponent
-import os
+from linebot.models import *
+import os, re
 from datetime import datetime, timedelta
 import logging
+from type import Status
 from apscheduler.schedulers.background import BackgroundScheduler
+from dotenv import load_dotenv
 
 logging.basicConfig(
     level=logging.INFO,  # 設置日誌級別（可選 DEBUG, INFO, WARNING, ERROR, CRITICAL）
@@ -22,26 +24,30 @@ target_id = 'Cf1695ceb1fb06c8942f0aace132c749c'
 scheduler = BackgroundScheduler()
 scheduler.start()
 
-# Line API 憑證
-LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN', 'szs387X6h/uFwALKyXCD/f/pOjEXnlMDcM28gINyfvsaV7nO8ZXrGehEmMRLRAr17FUV6TXR/DXfTKg+b7HHtLF3epFkM3ezwM78meLgqMNvDMJ/FnrHaAP05soATrkiaZj4d5EftoAKHlDtSpE1PQdB04t89/1O/w1cDnyilFU=')
-LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET', '073e81b7dc7e31ec5a127d8b935949ba')
+load_dotenv()
+
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
+LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
-# 模擬儲存提醒日期（實際應連接資料庫）
-reminder_date = datetime.strptime("2024-12-06", "%Y-%m-%d")
+# 儲存提醒日期
+reminder_date = None
+status = Status['normal']
 
 # 根路徑測試
 @app.route("/")
 def home():
     return "用藥提醒機器人運行中！"
 
-# 接收 Webhook 回調
 @app.route("/callback", methods=['POST'])
 def callback():
+    # 獲取請求的簽名
     signature = request.headers['X-Line-Signature']
+    # 獲取請求的body
     body = request.get_data(as_text=True)
+    app.logger.info("Request body: " + body)
 
     try:
         handler.handle(body, signature)
@@ -68,110 +74,92 @@ def handle_join(event):
         TextSendMessage(text="感謝邀請我加入！")
     )
 
-@handler.add(MessageEvent)
+@handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    # 獲取事件的來源
-    source = event.source
-    target_id = None
+    global reminder_date, status
+    user_input = event.message.text.strip()
 
-    # 判斷來源類型
-    if source.type == "user":
-        target_id = source.user_id
-        app.logger.info(f"獲取到用戶 ID: {target_id}")
-    elif source.type == "group":
-        target_id = source.group_id
-        app.logger.info(f"獲取到群組 ID: {target_id}")
-    elif source.type == "room":
-        target_id = source.room_id
-        app.logger.info(f"獲取到聊天室 ID: {target_id}")
-
-    # 可以回覆用戶的訊息，確認收到
-    reply = TextSendMessage(text="感謝你的訊息！我們已記錄你的 ID。")
-    line_bot_api.reply_message(event.reply_token, reply)
+    if status in [Status['normal'], Status['no_reminder_time']]:
+        # 檢查是否為"重設提醒時間"
+        if user_input == "重設提醒時間":
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="好的，請問想修改成什麼日子？輸入格式為 \"YYYY/MM/DD\""))
+            status = Status['check_reset_time']
+        elif not reminder_date:
+            status = Status['no_reminder_time']
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="目前沒有設定提醒日期，請輸入`重設提醒時間`設定提醒日期。"))
+        return
+    elif status == Status['check_reset_time']:
+        # 檢查是否為日期格式
+        date_match = re.match(r'^(\d{4}/\d{2}/\d{2})$', user_input)
+        if date_match:
+            new_date = datetime.strptime(user_input, "%Y/%m/%d")
+            reminder_date = new_date
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=f"提醒日期已設定為 {reminder_date.strftime('%Y/%m/%d')}"))
+            status = Status['normal']
+        else:
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="日期格式不正確，請重新輸入 (格式為 YYYY/MM/DD)"))
+        return
+    elif status == Status['set_delay_time']:
+        # 延後時間的回覆處理
+        if re.match(r'^\d+$', user_input):
+            days_to_delay = int(user_input)
+            reminder_date += timedelta(days=days_to_delay)
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=f"已延後提醒時間，新的提醒時間為 {reminder_date.strftime('%Y/%m/%d')}"))
+            status = Status['normal']
+            return
+        else:
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="請輸入有效的數字，表示要延後的天數。"))
+            return
 
 # 定期提醒訊息推送
 @app.route("/push_reminder", methods=['GET'])
 def push_reminder():
     global reminder_date
-    today = datetime.now().date()
-
-    # 如果今天是提醒日期，發送提醒
-    if today == reminder_date.date():
-        flex_message = FlexSendMessage(
-            alt_text="今天隊長要吃犬新寶！",
-            contents={
-                "type": "bubble",
-                "body": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "今天隊長要吃犬新寶！",
-                            "weight": "bold",
-                            "size": "xl"
-                        },
-                        {
-                            "type": "box",
-                            "layout": "horizontal",
-                            "contents": [
-                                {
-                                    "type": "button",
-                                    "action": {
-                                        "type": "postback",
-                                        "label": "完成",
-                                        "data": "action=completed"
-                                    },
-                                    "style": "primary"
-                                },
-                                {
-                                    "type": "button",
-                                    "action": {
-                                        "type": "postback",
-                                        "label": "今天忘記了，明天再提醒一次",
-                                        "data": "action=postpone"
-                                    },
-                                    "style": "secondary"
-                                }
-                            ]
-                        }
-                    ]
-                }
-            }
+    if reminder_date and reminder_date.date() == datetime.now().date():
+        buttons_template = TemplateSendMessage(
+            alt_text='提醒訊息',
+            template=ButtonsTemplate(
+                text="今天隊長要吃犬新寶！",
+                actions=[
+                    PostbackAction(label="我已經餵藥了", data="done_medicine"),
+                    PostbackAction(label="我想要延後時間", data="delay_medicine")
+                ]
+            )
         )
-        # 推送訊息給所有群組或聊天室
-        try:
-            line_bot_api.push_message(target_id, flex_message)
-            app.logger.info(f"訊息已成功推送到目標 ID: {target_id}")
-        except Exception as e:
-            app.logger.info(f"推送到目標 ID {target_id} 失敗，原因: {e}")
-        return "提醒已發送！"
-    return "今天不是提醒日！"
+        line_bot_api.push_message('USER_ID', buttons_template)
+    return "OK"
 
-# 處理 Postback
+# 點擊由機器人傳送的模板訊息按鈕（例如選單中的按鈕）並觸發回呼資料時觸發
 @handler.add(PostbackEvent)
 def handle_postback(event):
-    global reminder_date
+    global reminder_date, status
+
     data = event.postback.data
 
-    if data == "action=completed":
-        reminder_date += timedelta(days=90)  # 加三個月
-        reply = f"已完成用藥提醒！下次提醒時間為：{reminder_date.strftime('%Y-%m-%d')}"
-        # 安排下一次提醒任務（3個月後）
-        run_date = datetime.now() + timedelta(days=90)
-        scheduler.add_job(push_reminder, 'date', run_date=run_date)
-        app.logger.info(f"已安排 3 個月後的提醒，時間：{run_date}")
-    elif data == "action=postpone":
-        reminder_date += timedelta(seconds=5)  # 加一天
-        reply = f"提醒已延後，下次提醒時間為：{reminder_date.strftime('%Y-%m-%d')}"
-        # 使用 APScheduler 在 5 秒後安排推送提醒任務
-        run_date = datetime.now() + timedelta(seconds=5)
-        scheduler.add_job(push_reminder, 'date', run_date=run_date)
-        app.logger.info(f"已安排延後的提醒，時間：{run_date}")
-    else:
-        reply = "未知操作，請重新選擇。"
-
-    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+    if data == "done_medicine":
+        reminder_date += timedelta(days=30)
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=f"下次提醒時間為 {reminder_date.strftime('%Y/%m/%d')}"))
+        status = Status['normal']
+    elif data == "delay_medicine":
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="想要延後幾天呢？請輸入數字"))
+        status = Status['set_delay_time']
+        
 
 # 主程式執行
 if __name__ == "__main__":
