@@ -159,7 +159,7 @@ def handle_postback(event):
 if __name__ == "__main__":
     # 初始化 APScheduler
     scheduler = BackgroundScheduler()
-    scheduler.add_job(check_reminder, 'interval', days=1, start_date=datetime.now().replace(hour=15, minute=40, second=0))
+    scheduler.add_job(check_reminder, 'interval', days=1, start_date=datetime.now().replace(hour=15, minute=42, second=0))
     scheduler.start()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
