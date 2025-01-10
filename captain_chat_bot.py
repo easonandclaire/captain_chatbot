@@ -20,10 +20,6 @@ app = Flask(__name__)
 
 target_id = 'Cf1695ceb1fb06c8942f0aace132c749c'
 
-# 初始化 APScheduler
-scheduler = BackgroundScheduler()
-scheduler.start()
-
 load_dotenv()
 
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
@@ -123,23 +119,21 @@ def handle_message(event):
                 TextSendMessage(text="請輸入有效的數字，表示要延後的天數。"))
             return
 
-# 定期提醒訊息推送
-@app.route("/push_reminder", methods=['GET'])
-def push_reminder():
+def check_reminder():
     global reminder_date
+    app.logger.info("檢查提醒日期")
     if reminder_date and reminder_date.date() == datetime.now().date():
         buttons_template = TemplateSendMessage(
             alt_text='提醒訊息',
             template=ButtonsTemplate(
-                text="今天隊長要吃犬新寶！",
+                text="今天是提醒日期，請確認是否已經完成！",
                 actions=[
                     PostbackAction(label="我已經餵藥了", data="done_medicine"),
                     PostbackAction(label="我想要延後時間", data="delay_medicine")
                 ]
             )
         )
-        line_bot_api.push_message('USER_ID', buttons_template)
-    return "OK"
+        line_bot_api.push_message(target_id, buttons_template)
 
 # 點擊由機器人傳送的模板訊息按鈕（例如選單中的按鈕）並觸發回呼資料時觸發
 @handler.add(PostbackEvent)
@@ -163,5 +157,9 @@ def handle_postback(event):
 
 # 主程式執行
 if __name__ == "__main__":
+    # 初始化 APScheduler
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(check_reminder, 'interval', days=1, start_date=datetime.now().replace(hour=15, minute=40, second=0))
+    scheduler.start()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
