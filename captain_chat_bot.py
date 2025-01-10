@@ -6,7 +6,6 @@ import os, re
 from datetime import datetime, timedelta
 import logging
 from type import Status, UserInput
-from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 
 logging.basicConfig(
@@ -52,6 +51,11 @@ def callback():
 
     return 'OK'
 
+@app.route("/trigger_reminder", methods=["GET"])
+def trigger_reminder():
+    check_reminder()  # 手動調用定時檢查函數
+    return "Reminder triggered!", 200
+
 @handler.add(JoinEvent)
 def handle_join(event):
     app.logger.info("JoinEvent received - starting to process")
@@ -87,6 +91,14 @@ def handle_message(event):
             line_bot_api.reply_message(
                 event.reply_token,
                 TextSendMessage(text="目前沒有設定提醒日期，請輸入`重設提醒時間`設定提醒日期。"))
+        elif user_input == UserInput[Status['query_reminder']]:
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=f"目前提醒時間為 {reminder_date.strftime('%Y/%m/%d')} 早上 8 點"))
+        else:
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="目前的有效指令為：\n1. 重設提醒時間\n2. 查詢提醒時間"))
         return
     elif status == Status['check_reset_time']:
         # 檢查是否為日期格式
@@ -118,19 +130,13 @@ def handle_message(event):
                 event.reply_token,
                 TextSendMessage(text="請輸入有效的數字，表示要延後的天數。"))
             return
-    elif status == UserInput[Status['query_reminder']]:
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=f"目前提醒時間為 {reminder_date.strftime('%Y/%m/%d')} 早上 8 點"))
-        return
     else:
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text="目前的有效指令為：\n1. 重設提醒時間\n2. 查詢提醒時間"))
+            TextSendMessage(text=f"狀態錯誤，請通知昱豪！\nStatus = {status}"))
 
 def check_reminder():
     global reminder_date
-    app.logger.info("檢查提醒日期")
     if reminder_date and reminder_date.date() == datetime.now().date():
         buttons_template = TemplateSendMessage(
             alt_text='提醒訊息',
@@ -166,9 +172,5 @@ def handle_postback(event):
 
 # 主程式執行
 if __name__ == "__main__":
-    # 初始化 APScheduler
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(check_reminder, 'interval', days=1, start_date=datetime.now().replace(hour=15, minute=52, second=30))
-    scheduler.start()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
