@@ -160,7 +160,7 @@ def handle_message(event):
 def check_reminder():
     global reminder_date
     # 檢查是否要餵一錠除
-    if reminder_date['bravecto'] and reminder_date['bravecto'].date() == datetime.now().date():
+    if reminder_date['bravecto']:
         for user_id in user_set:
             buttons_template = TemplateSendMessage(
                 alt_text='提醒訊息',
@@ -173,7 +173,7 @@ def check_reminder():
                 )
             )
             line_bot_api.push_message(user_id, buttons_template)
-    elif reminder_date['heartgard'] and reminder_date['heartgard'].date() == datetime.now().date():
+    elif reminder_date['heartgard']:
         for user_id in user_set:
             buttons_template = TemplateSendMessage(
                 alt_text='提醒訊息',
