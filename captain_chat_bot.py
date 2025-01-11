@@ -5,7 +5,7 @@ from linebot.models import *
 import os, re
 from datetime import datetime, timedelta
 import logging
-from type import Status, UserInput
+from type import Status, UserInput, Medicine
 from dotenv import load_dotenv
 
 logging.basicConfig(
@@ -28,7 +28,11 @@ line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 # 儲存提醒日期
-reminder_date = None
+reminder_date = {
+    'bravecto': None,
+    'heartgard': None
+}
+update_reminder_type = None
 status = Status['normal']
 
 # 根路徑測試
@@ -74,62 +78,76 @@ def handle_join(event):
         TextSendMessage(text="感謝邀請我加入！")
     )
 
+def query_reminder_date():
+    global reminder_date, status
+    if not reminder_date['bravecto'] and not reminder_date['heartgard']:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="目前沒有提醒時間，請輸入「修改提醒時間」進行設定。"))
+    elif not reminder_date['bravecto']:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=f"下次餵 {Medicine['heartgard']} 的日期為：{reminder_date['heartgard']}\n目前沒有設定 {Medicine['bravecto']} 的提醒時間，請輸入「修改提醒時間"))
+    elif not reminder_date['heartgard']:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=f"下次餵 {Medicine['bravecto']} 的日期為：{reminder_date['bravecto']}\n目前沒有設定 {Medicine['heartgard']} 的提醒時間，請輸入「修改提醒時間"))
+    else:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=f"下次餵{Medicine['bravecto']}的日期為：{reminder_date['bravecto']}\n下次餵{Medicine['heartgard']}的日期為：{reminder_date['heartgard']}"))
+
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     global reminder_date, status
     user_input = event.message.text.strip()
 
-    if status in [Status['normal'], Status['no_reminder_time']]:
-        # 檢查是否為"重設提醒時間"
-        if user_input == UserInput[Status['reset_time']]:
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text="好的，請問想修改成什麼日子？輸入格式為 \"YYYY/MM/DD\""))
-            status = Status['check_reset_time']
-        elif not reminder_date:
-            status = Status['no_reminder_time']
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text="目前沒有設定提醒日期，請輸入`重設提醒時間`設定提醒日期。"))
-        elif user_input == UserInput[Status['query_reminder']]:
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text=f"目前提醒時間為 {reminder_date.strftime('%Y/%m/%d')} 早上 8 點"))
+    if status == Status['normal']:
+        if user_input == UserInput[Status['query_reminder']]:
+            query_reminder_date()
+        elif user_input == UserInput[Status['reset_time']]:
+            buttons_template = TemplateSendMessage(
+                alt_text='提醒訊息',
+                template=ButtonsTemplate(
+                    text="想要修改或設定的是犬新寶還是一錠除的時間呢？",
+                    actions=[
+                        PostbackAction(label="犬新寶", data=["update_reminder", "heartgard"]),
+                        PostbackAction(label="一錠除", data=["update_reminder", "bravecto"])
+                    ]
+                )
+            )
+            line_bot_api.push_message(target_id, buttons_template)
         else:
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text="目前的有效指令為：\n1. 重設提醒時間\n2. 查詢提醒時間"))
+                TextSendMessage(text="目前的有效指令為：\n1. 修改提醒時間\n2. 查詢提醒時間"))
         return
     elif status == Status['check_reset_time']:
         # 檢查是否為日期格式
         date_match = re.match(r'^(\d{4}/\d{2}/\d{2})$', user_input)
         if date_match:
             new_date = datetime.strptime(user_input, "%Y/%m/%d")
-            reminder_date = new_date
+            if new_date < datetime.now():
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="此為過去時間，請重新輸入提醒時間。"))
+                return
+            if update_reminder_type == None:
+                app.logger.error("update_reminder_type 為空！")
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=f"後端有問題，請聯繫昱豪！"))
+                return
+            reminder_date[update_reminder_type] = new_date
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text=f"提醒日期已設定為 {reminder_date.strftime('%Y/%m/%d')}"))
+                TextSendMessage(text=f"完成設定，下次餵 {Medicine[update_reminder_type]} 的日期為：{reminder_date[update_reminder_type].strftime('%Y/%m/%d')}。"))
             status = Status['normal']
         else:
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text="日期格式不正確，請重新輸入 (格式為 YYYY/MM/DD)"))
+                TextSendMessage(text="時間輸入格式錯誤，，請重新輸入提醒時間。"))
         return
-    elif status == Status['set_delay_time']:
-        # 延後時間的回覆處理
-        if re.match(r'^\d+$', user_input):
-            days_to_delay = int(user_input)
-            reminder_date += timedelta(days=days_to_delay)
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text=f"已延後提醒時間，新的提醒時間為 {reminder_date.strftime('%Y/%m/%d')}"))
-            status = Status['normal']
-            return
-        else:
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text="請輸入有效的數字，表示要延後的天數。"))
-            return
     else:
         line_bot_api.reply_message(
             event.reply_token,
@@ -137,38 +155,70 @@ def handle_message(event):
 
 def check_reminder():
     global reminder_date
-    if reminder_date and reminder_date.date() == datetime.now().date():
+    # 檢查是否要餵一錠除
+    if reminder_date[Medicine['bravecto']] == datetime.now().date():
         buttons_template = TemplateSendMessage(
             alt_text='提醒訊息',
             template=ButtonsTemplate(
-                text="今天是提醒日期，請確認是否已經完成！",
+                text=f"今天是餵隊長{Medicine['bravecto']}的日子！請確認是否已經完成！",
                 actions=[
-                    PostbackAction(label="我已經餵藥了", data="done_medicine"),
-                    PostbackAction(label="我想要延後時間", data="delay_medicine")
+                    PostbackAction(label="我已經完成餵藥囉", data=["done_medicine", "bravecto"]),
+                    PostbackAction(label="今天忘記了，明天再提醒一次", data=["delay_medicine", "bravecto"])
                 ]
             )
         )
         line_bot_api.push_message(target_id, buttons_template)
+    elif reminder_date[Medicine['heartgard']] == datetime.now().date():
+        buttons_template = TemplateSendMessage(
+            alt_text='提醒訊息',
+            template=ButtonsTemplate(
+                text=f"今天是餵隊長{Medicine['heartgard']}的日子！請確認是否已經完成！",
+                actions=[
+                    PostbackAction(label="我已經完成餵藥囉", data=["done_medicine", "heartgard"]),
+                    PostbackAction(label="今天忘記了，明天再提醒一次", data=["delay_medicine", "heartgard"])
+                ]
+            )
+        )
+        line_bot_api.push_message(target_id, buttons_template)
+    else:
+        app.logger.error("提醒日期為空！")
 
 # 點擊由機器人傳送的模板訊息按鈕（例如選單中的按鈕）並觸發回呼資料時觸發
 @handler.add(PostbackEvent)
 def handle_postback(event):
     global reminder_date, status
 
-    data = event.postback.data
+    action, type = event.postback.data
 
-    if data == "done_medicine":
-        reminder_date += timedelta(days=30)
+    if action == "done_medicine":
+        if type == 'bravecto':
+            reminder_date[type] += timedelta(days=90)
+        elif type == 'heartgard':
+            reminder_date[type] += timedelta(days=30)
+        else:
+            app.logger.error(f"未知的藥物類型：{type}")
+            return
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=f"下次提醒時間為 {reminder_date.strftime('%Y/%m/%d')}"))
+            TextSendMessage(text=f"好的，下次提醒時間為 {reminder_date[type].strftime('%Y/%m/%d')}"))
         status = Status['normal']
-    elif data == "delay_medicine":
+    elif action == "delay_medicine":
+        reminder_date[type] += timedelta(days=1)
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text="想要延後幾天呢？請輸入數字"))
-        status = Status['set_delay_time']
-        
+            TextSendMessage(text=f"下次提醒時間設為隔日 {reminder_date[type]} 送出提醒"))
+    elif action == 'update_reminder':
+        update_reminder_date(type)
+    else:
+        app.logger.error(f"未知的動作：{action}")
+
+def update_reminder_date(type):
+    global status, update_reminder_type
+    update_reminder_type = type
+    status = Status['check_reset_time']
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=f"請輸入想要提醒的時間（YYYY/MM/DD）。"))
 
 # 主程式執行
 if __name__ == "__main__":
