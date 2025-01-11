@@ -88,15 +88,15 @@ def query_reminder_date(event):
     elif not reminder_date['bravecto']:
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=f"下次餵 {Medicine['heartgard']} 的日期為：{reminder_date['heartgard'].date()}\n目前沒有設定 {Medicine['bravecto']} 的提醒時間，請輸入「修改提醒時間」"))
+            TextSendMessage(text=f"下次餵 {Medicine['heartgard']} 的日期為：{reminder_date['heartgard'].strftime('%Y/%m/%d')}\n目前沒有設定 {Medicine['bravecto']} 的提醒時間，請輸入「修改提醒時間」"))
     elif not reminder_date['heartgard']:
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=f"下次餵 {Medicine['bravecto']} 的日期為：{reminder_date['bravecto'].date()}\n目前沒有設定 {Medicine['heartgard']} 的提醒時間，請輸入「修改提醒時間」"))
+            TextSendMessage(text=f"下次餵 {Medicine['bravecto']} 的日期為：{reminder_date['bravecto'].strftime('%Y/%m/%d')}\n目前沒有設定 {Medicine['heartgard']} 的提醒時間，請輸入「修改提醒時間」"))
     else:
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=f"下次餵{Medicine['bravecto']}的日期為：{reminder_date['bravecto'].date()}\n下次餵{Medicine['heartgard']}的日期為：{reminder_date['heartgard'].date()}"))
+            TextSendMessage(text=f"下次餵{Medicine['bravecto']}的日期為：{reminder_date['bravecto'].strftime('%Y/%m/%d')}\n下次餵{Medicine['heartgard']}的日期為：{reminder_date['heartgard'].strftime('%Y/%m/%d')}"))
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
@@ -215,13 +215,13 @@ def handle_postback(event):
             return
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=f"好的，下次提醒時間為 {reminder_date[med_type].strftime('%Y/%m/%d')}"))
+            TextSendMessage(text=f"好的，{Medicine[med_type]}的下次提醒時間為 {reminder_date[med_type].strftime('%Y/%m/%d')}"))
         status = Status['normal']
     elif action == "delay_medicine":
         reminder_date[med_type] = datetime.now().date() + timedelta(days=1)
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=f"下次提醒時間設為隔日 {reminder_date[med_type].strftime('%Y/%m/%d')} 送出提醒"))
+            TextSendMessage(text=f"{Medicine[med_type]}的下次提醒時間設為隔日 {reminder_date[med_type].strftime('%Y/%m/%d')} 送出提醒"))
     elif action == 'update_reminder':
         update_reminder_date(event, med_type)
     else:
