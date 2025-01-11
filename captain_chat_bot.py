@@ -78,7 +78,7 @@ def handle_join(event):
         TextSendMessage(text="感謝邀請我加入！")
     )
 
-def query_reminder_date():
+def query_reminder_date(event):
     global reminder_date, status
     if not reminder_date['bravecto'] and not reminder_date['heartgard']:
         line_bot_api.reply_message(
@@ -104,7 +104,7 @@ def handle_message(event):
 
     if status == Status['normal']:
         if user_input == UserInput[Status['query_reminder']]:
-            query_reminder_date()
+            query_reminder_date(event)
         elif user_input == UserInput[Status['reset_time']]:
             buttons_template = TemplateSendMessage(
                 alt_text='提醒訊息',
