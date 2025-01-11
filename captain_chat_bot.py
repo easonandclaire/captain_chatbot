@@ -77,6 +77,7 @@ def handle_join(event):
         TextSendMessage(text="感謝邀請我加入！")
     )
     user_set.add(event.source.user_id)
+    app.logger.info(f"加入使用者，使用者 ID: {event.source.user_id}")
 
 def query_reminder_date(event):
     global reminder_date, status
@@ -87,15 +88,15 @@ def query_reminder_date(event):
     elif not reminder_date['bravecto']:
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=f"下次餵 {Medicine['heartgard']} 的日期為：{reminder_date['heartgard']}\n目前沒有設定 {Medicine['bravecto']} 的提醒時間，請輸入「修改提醒時間"))
+            TextSendMessage(text=f"下次餵 {Medicine['heartgard']} 的日期為：{reminder_date['heartgard'].date()}\n目前沒有設定 {Medicine['bravecto']} 的提醒時間，請輸入「修改提醒時間」"))
     elif not reminder_date['heartgard']:
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=f"下次餵 {Medicine['bravecto']} 的日期為：{reminder_date['bravecto']}\n目前沒有設定 {Medicine['heartgard']} 的提醒時間，請輸入「修改提醒時間"))
+            TextSendMessage(text=f"下次餵 {Medicine['bravecto']} 的日期為：{reminder_date['bravecto'].date()}\n目前沒有設定 {Medicine['heartgard']} 的提醒時間，請輸入「修改提醒時間」"))
     else:
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=f"下次餵{Medicine['bravecto']}的日期為：{reminder_date['bravecto']}\n下次餵{Medicine['heartgard']}的日期為：{reminder_date['heartgard']}"))
+            TextSendMessage(text=f"下次餵{Medicine['bravecto']}的日期為：{reminder_date['bravecto'].date()}\n下次餵{Medicine['heartgard']}的日期為：{reminder_date['heartgard'].date()}"))
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
@@ -103,6 +104,7 @@ def handle_message(event):
     user_input = event.message.text.strip()
     if event.source.user_id not in user_set:
         user_set.add(event.source.user_id)
+        app.logger.info(f"加入使用者，使用者 ID: {event.source.user_id}")
 
     if status == Status['normal']:
         if user_input == UserInput[Status['query_reminder']]:
@@ -148,7 +150,7 @@ def handle_message(event):
         else:
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text="時間輸入格式錯誤，，請重新輸入提醒時間。"))
+                TextSendMessage(text="時間輸入格式錯誤，請重新輸入提醒時間。"))
         return
     else:
         line_bot_api.reply_message(
@@ -184,8 +186,10 @@ def check_reminder():
                 )
             )
             line_bot_api.push_message(user_id, buttons_template)
-    else:
+    elif not reminder_date['bravecto'] and not reminder_date['heartgard']:
         app.logger.error("提醒日期為空！")
+    else:
+        app.logger.info("今天不是提醒日期！")
 
 # 點擊由機器人傳送的模板訊息按鈕（例如選單中的按鈕）並觸發回呼資料時觸發
 @handler.add(PostbackEvent)
