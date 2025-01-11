@@ -130,23 +130,28 @@ def handle_message(event):
         # 檢查是否為日期格式
         date_match = re.match(r'^(\d{4}/\d{2}/\d{2})$', user_input)
         if date_match:
-            new_date = datetime.strptime(user_input, "%Y/%m/%d")
-            if new_date < datetime.now():
+            try:
+                new_date = datetime.strptime(user_input, "%Y/%m/%d")
+                if new_date < datetime.now():
+                    line_bot_api.reply_message(
+                        event.reply_token,
+                        TextSendMessage(text="此為過去時間，請重新輸入提醒時間。"))
+                    return
+                if update_reminder_type == None:
+                    app.logger.error("update_reminder_type 為空！")
+                    line_bot_api.reply_message(
+                        event.reply_token,
+                        TextSendMessage(text=f"後端有問題，請聯繫昱豪！"))
+                    return
+                reminder_date[update_reminder_type] = new_date
                 line_bot_api.reply_message(
                     event.reply_token,
-                    TextSendMessage(text="此為過去時間，請重新輸入提醒時間。"))
-                return
-            if update_reminder_type == None:
-                app.logger.error("update_reminder_type 為空！")
+                    TextSendMessage(text=f"完成設定，下次餵 {Medicine[update_reminder_type]} 的日期為：{reminder_date[update_reminder_type].strftime('%Y/%m/%d')}。"))
+                status = Status['normal']
+            except ValueError:
                 line_bot_api.reply_message(
                     event.reply_token,
-                    TextSendMessage(text=f"後端有問題，請聯繫昱豪！"))
-                return
-            reminder_date[update_reminder_type] = new_date
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text=f"完成設定，下次餵 {Medicine[update_reminder_type]} 的日期為：{reminder_date[update_reminder_type].strftime('%Y/%m/%d')}。"))
-            status = Status['normal']
+                    TextSendMessage(text="時間輸入格式錯誤，請重新輸入提醒時間。"))
         else:
             line_bot_api.reply_message(
                 event.reply_token,
@@ -173,7 +178,7 @@ def check_reminder():
                 )
             )
             line_bot_api.push_message(user_id, buttons_template)
-    elif reminder_date['heartgard']:
+    if reminder_date['heartgard']:
         for user_id in user_set:
             buttons_template = TemplateSendMessage(
                 alt_text='提醒訊息',
@@ -213,10 +218,10 @@ def handle_postback(event):
             TextSendMessage(text=f"好的，下次提醒時間為 {reminder_date[med_type].strftime('%Y/%m/%d')}"))
         status = Status['normal']
     elif action == "delay_medicine":
-        reminder_date[med_type] += timedelta(days=1)
+        reminder_date[med_type] = datetime.now().date() + timedelta(days=1)
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=f"下次提醒時間設為隔日 {reminder_date[med_type]} 送出提醒"))
+            TextSendMessage(text=f"下次提醒時間設為隔日 {reminder_date[med_type].strftime('%Y/%m/%d')} 送出提醒"))
     elif action == 'update_reminder':
         update_reminder_date(event, med_type)
     else:
