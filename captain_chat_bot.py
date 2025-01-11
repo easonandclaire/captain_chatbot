@@ -2,7 +2,7 @@ from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import *
-import os, re
+import os, re, json
 from datetime import datetime, timedelta
 import logging
 from type import Status, UserInput, Medicine
@@ -16,8 +16,6 @@ logging.basicConfig(
 
 # 初始化 Flask
 app = Flask(__name__)
-
-target_id = 'Cf1695ceb1fb06c8942f0aace132c749c'
 
 load_dotenv()
 
@@ -34,6 +32,7 @@ reminder_date = {
 }
 update_reminder_type = None
 status = Status['normal']
+user_set = set()
 
 # 根路徑測試
 @app.route("/")
@@ -77,6 +76,7 @@ def handle_join(event):
         event.reply_token,
         TextSendMessage(text="感謝邀請我加入！")
     )
+    user_set.add(event.source.user_id)
 
 def query_reminder_date(event):
     global reminder_date, status
@@ -101,6 +101,8 @@ def query_reminder_date(event):
 def handle_message(event):
     global reminder_date, status
     user_input = event.message.text.strip()
+    if event.source.user_id not in user_set:
+        user_set.add(event.source.user_id)
 
     if status == Status['normal']:
         if user_input == UserInput[Status['query_reminder']]:
@@ -111,12 +113,12 @@ def handle_message(event):
                 template=ButtonsTemplate(
                     text="想要修改或設定的是犬新寶還是一錠除的時間呢？",
                     actions=[
-                        PostbackAction(label="犬新寶", data=["update_reminder", "heartgard"]),
-                        PostbackAction(label="一錠除", data=["update_reminder", "bravecto"])
+                        PostbackAction(label="犬新寶", data='{"action":"update_reminder", "type":"heartgard"}'),
+                        PostbackAction(label="一錠除", data='{"action":"update_reminder", "type":"bravecto"}')
                     ]
                 )
             )
-            line_bot_api.push_message(target_id, buttons_template)
+            line_bot_api.push_message(event.source.user_id, buttons_template)
         else:
             line_bot_api.reply_message(
                 event.reply_token,
@@ -156,30 +158,32 @@ def handle_message(event):
 def check_reminder():
     global reminder_date
     # 檢查是否要餵一錠除
-    if reminder_date['bravecto'] == datetime.now().date():
-        buttons_template = TemplateSendMessage(
-            alt_text='提醒訊息',
-            template=ButtonsTemplate(
-                text=f"今天是餵隊長{Medicine['bravecto']}的日子！請確認是否已經完成！",
-                actions=[
-                    PostbackAction(label="我已經完成餵藥囉", data=["done_medicine", "bravecto"]),
-                    PostbackAction(label="今天忘記了，明天再提醒一次", data=["delay_medicine", "bravecto"])
-                ]
+    if reminder_date['bravecto'].date() == datetime.now().date():
+        for user_id in user_set:
+            buttons_template = TemplateSendMessage(
+                alt_text='提醒訊息',
+                template=ButtonsTemplate(
+                    text=f"今天是餵隊長{Medicine['bravecto']}的日子！請確認是否已經完成！",
+                    actions=[
+                        PostbackAction(label="我已經完成餵藥囉", data='{"action": "done_medicine", "type": "bravecto"}'),
+                        PostbackAction(label="今天忘記了，明天再提醒一次", data='{"action": "delay_medicine", "type": "bravecto"}')
+                    ]
+                )
             )
-        )
-        line_bot_api.push_message(target_id, buttons_template)
-    elif reminder_date['heartgard'] == datetime.now().date():
-        buttons_template = TemplateSendMessage(
-            alt_text='提醒訊息',
-            template=ButtonsTemplate(
-                text=f"今天是餵隊長{Medicine['heartgard']}的日子！請確認是否已經完成！",
-                actions=[
-                    PostbackAction(label="我已經完成餵藥囉", data=["done_medicine", "heartgard"]),
-                    PostbackAction(label="今天忘記了，明天再提醒一次", data=["delay_medicine", "heartgard"])
-                ]
+            line_bot_api.push_message(user_id, buttons_template)
+    elif reminder_date['heartgard'].date() == datetime.now().date():
+        for user_id in user_set:
+            buttons_template = TemplateSendMessage(
+                alt_text='提醒訊息',
+                template=ButtonsTemplate(
+                    text=f"今天是餵隊長{Medicine['heartgard']}的日子！請確認是否已經完成！",
+                    actions=[
+                        PostbackAction(label="我已經完成餵藥囉", data='{"action": "done_medicine", "type": "heartgard"}'),
+                        PostbackAction(label="今天忘記了，明天再提醒一次", data='{"action": "delay_medicine", "type": "heartgard"}')
+                    ]
+                )
             )
-        )
-        line_bot_api.push_message(target_id, buttons_template)
+            line_bot_api.push_message(user_id, buttons_template)
     else:
         app.logger.error("提醒日期為空！")
 
@@ -188,33 +192,35 @@ def check_reminder():
 def handle_postback(event):
     global reminder_date, status
 
-    action, type = event.postback.data
+    data = json.loads(event.postback.data)  # 將 JSON 字串轉換為字典
+    action = data.get("action")
+    med_type = data.get("type")
 
     if action == "done_medicine":
-        if type == 'bravecto':
-            reminder_date[type] += timedelta(days=90)
-        elif type == 'heartgard':
-            reminder_date[type] += timedelta(days=30)
+        if med_type == 'bravecto':
+            reminder_date[med_type] += timedelta(days=90)
+        elif med_type == 'heartgard':
+            reminder_date[med_type] += timedelta(days=30)
         else:
-            app.logger.error(f"未知的藥物類型：{type}")
+            app.logger.error(f"未知的藥物類型：{med_type}")
             return
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=f"好的，下次提醒時間為 {reminder_date[type].strftime('%Y/%m/%d')}"))
+            TextSendMessage(text=f"好的，下次提醒時間為 {reminder_date[med_type].strftime('%Y/%m/%d')}"))
         status = Status['normal']
     elif action == "delay_medicine":
-        reminder_date[type] += timedelta(days=1)
+        reminder_date[med_type] += timedelta(days=1)
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=f"下次提醒時間設為隔日 {reminder_date[type]} 送出提醒"))
+            TextSendMessage(text=f"下次提醒時間設為隔日 {reminder_date[med_type]} 送出提醒"))
     elif action == 'update_reminder':
-        update_reminder_date(type)
+        update_reminder_date(event, med_type)
     else:
         app.logger.error(f"未知的動作：{action}")
 
-def update_reminder_date(type):
+def update_reminder_date(event, med_type):
     global status, update_reminder_type
-    update_reminder_type = type
+    update_reminder_type = med_type
     status = Status['check_reset_time']
     line_bot_api.reply_message(
         event.reply_token,
