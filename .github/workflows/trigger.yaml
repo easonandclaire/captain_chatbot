@@ -2,7 +2,7 @@ name: Daily Reminder Trigger
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # UTC 00:00，即台灣早上 08:00
+    - cron: '0 10 * * *'  # UTC 00:00，即台灣早上 08:00
   workflow_dispatch:
 
 jobs:
