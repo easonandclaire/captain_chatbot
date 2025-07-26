@@ -270,7 +270,7 @@ def handle_postback(event):
         status = Status['normal']
 
     elif action == "delay_medicine":
-        if getattr(state, f"{med_type}_status") == 'waiting':
+        if getattr(state, f"{med_type}_status") != 'waiting':
             line_bot_api.reply_message(
                 event.reply_token,
                 TextSendMessage(text=f"已經處理過 {Medicine[med_type]} 的提醒了。"))
