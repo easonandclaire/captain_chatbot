@@ -2,7 +2,7 @@ name: Reminder Trigger
 
 on:
   schedule:
-    - cron: '0 14 * * *'  # 每天 UTC 14:00 = 台北 22:00
+    - cron: '0 22 * * *'  # 每天 UTC 22:00 = 台北 06:00
   workflow_dispatch:      # 手動執行
 
 jobs:
