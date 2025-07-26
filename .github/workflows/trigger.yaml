@@ -1,13 +1,19 @@
-name: Daily Reminder Trigger
+name: Reminder Trigger
 
 on:
   schedule:
-    - cron: '0 10 * * *'  # UTC 00:00，即台灣早上 08:00
-  workflow_dispatch:
+    - cron: '0 14 * * *'  # 每天 UTC 14:00 = 台北 22:00
+  workflow_dispatch:      # 手動執行
 
 jobs:
-  trigger:
+  run-reminder:
     runs-on: ubuntu-latest
     steps:
+      - name: Wake up PythonAnywhere
+        run: curl https://easonandclaire.pythonanywhere.com/
+
+      - name: Wait for 2 minutes
+        run: sleep 120
+
       - name: Trigger Reminder API
         run: curl https://easonandclaire.pythonanywhere.com/trigger_reminder
