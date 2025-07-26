@@ -12,8 +12,8 @@ jobs:
       - name: Wake up PythonAnywhere
         run: curl https://easonandclaire.pythonanywhere.com/
 
-      - name: Wait for 2 minutes
-        run: sleep 120
+      - name: Wait for 1 minutes
+        run: sleep 60
 
       - name: Trigger Reminder API
         run: curl https://easonandclaire.pythonanywhere.com/trigger_reminder
