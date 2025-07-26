@@ -7,6 +7,7 @@ import os, re, json
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 import logging
+from sqlalchemy.exc import OperationalError
 
 logging.basicConfig(
     level=logging.INFO,
@@ -75,7 +76,14 @@ status = Status['normal']
 # --------------------------- 輔助函式 ---------------------------
 
 def get_state():
-    state = ReminderState.query.get(1)
+    try:
+        state = ReminderState.query.get(1)
+    except OperationalError as e:
+        app.logger.warning(f"資料庫連線失敗，重新嘗試：{e}")
+        db.session.rollback()
+        db.session.close()
+        state = ReminderState.query.get(1)
+
     if not state:
         state = ReminderState(id=1)
         db.session.add(state)
