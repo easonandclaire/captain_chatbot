@@ -10,4 +10,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Reminder API
-        run: curl https://你的username.pythonanywhere.com/trigger_reminder
+        run: curl https://easonandclaire.pythonanywhere.com/trigger_reminder
