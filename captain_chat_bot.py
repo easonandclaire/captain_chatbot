@@ -9,6 +9,9 @@ from dotenv import load_dotenv
 import logging
 from sqlalchemy.exc import OperationalError
 
+# 定義台灣時區 (UTC+8)
+TZ_TW = timezone(timedelta(hours=8))
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
@@ -149,8 +152,9 @@ def handle_message(event):
     elif status == Status['check_reset_time']:
         match = re.match(r'^\d{4}/\d{2}/\d{2}$', user_input)
         if match:
-            new_date = datetime.strptime(user_input, "%Y/%m/%d")
-            if new_date.date() < datetime.now().date():
+            # 使用本地時區創建日期（設定為當天 00:00:00 台灣時間）
+            new_date = datetime.strptime(user_input, "%Y/%m/%d").replace(tzinfo=TZ_TW)
+            if new_date.date() < datetime.now(TZ_TW).date():
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text="此為過去時間，請重新輸入提醒時間。"))
                 return
             if update_reminder_type is None:
@@ -167,7 +171,7 @@ def handle_message(event):
     else:
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"狀態錯誤，請通知昱豪！\nStatus = {status}"))
 
-# --------------------------- 功能：查詢提醒 ---------------------------    
+# --------------------------- 功能：查詢提醒 ---------------------------
 def query_reminder_date(event):
     state = get_state()
     if not state.bravecto_date and not state.heartgard_date:
@@ -190,16 +194,25 @@ def query_reminder_date(event):
             TextSendMessage(
                 text=f"下次餵{Medicine['bravecto']}的日期為：{state.bravecto_date.strftime('%Y/%m/%d')}\n下次餵{Medicine['heartgard']}的日期為：{state.heartgard_date.strftime('%Y/%m/%d')}"))
 
-# --------------------------- 功能：每日檢查並推播 ---------------------------    
+# --------------------------- 功能：每日檢查並推播 ---------------------------
 def check_reminder():
-    today = datetime.now().date()
+    # 使用台灣時區來取得今天的日期
+    today = datetime.now(TZ_TW).date()
     state = get_state()
 
     for med in ['bravecto', 'heartgard']:
         med_date = getattr(state, f"{med}_date")
         med_status = getattr(state, f"{med}_status")
 
-        if not med_date or med_date.date() != today or med_status != 'pending':
+        if not med_date:
+            continue
+        
+        # 確保 med_date 有時區資訊，如果沒有則假設為台灣時區
+        if med_date.tzinfo is None:
+            med_date = med_date.replace(tzinfo=TZ_TW)
+        
+        # 比較日期（使用台灣時區）
+        if med_date.date() != today or med_status != 'pending':
             continue  # 只針對今日且 pending 的提醒
 
         buttons_template = TemplateSendMessage(
@@ -223,7 +236,7 @@ def check_reminder():
             setattr(state, f"{med}_status", "waiting")
         db.session.commit()   # 記得提交
 
-# --------------------------- Postback 處理 ---------------------------    
+# --------------------------- Postback 處理 ---------------------------
 @handler.add(PostbackEvent)
 def handle_postback(event):
     global status, update_reminder_type
@@ -233,8 +246,12 @@ def handle_postback(event):
     data = json.loads(event.postback.data)
     action = data.get("action")
     med_type = data.get("type")
-    today = datetime.now().date()
+    today = datetime.now(TZ_TW).date()
     current_date = getattr(state, f"{med_type}_date")
+    
+    # 確保 current_date 有時區資訊
+    if current_date and current_date.tzinfo is None:
+        current_date = current_date.replace(tzinfo=TZ_TW)
 
     if action == "update_reminder":
         update_reminder_type = med_type
@@ -259,7 +276,8 @@ def handle_postback(event):
 
         # 順延日期
         delta = 90 if med_type == 'bravecto' else 30
-        next_date = (current_date or datetime.now()) + timedelta(days=delta)
+        base_date = current_date if current_date else datetime.now(TZ_TW)
+        next_date = base_date + timedelta(days=delta)
         setattr(state, f"{med_type}_date", next_date)
         setattr(state, f"{med_type}_status", 'pending')   # 重設為 pending
         db.session.commit()
@@ -283,7 +301,7 @@ def handle_postback(event):
                 TextSendMessage(text=f"已經完成過 {Medicine[med_type]} 的餵藥，不需要再操作。"))
             return
 
-        tomorrow = datetime.now() + timedelta(days=1)
+        tomorrow = datetime.now(TZ_TW) + timedelta(days=1)
         setattr(state, f"{med_type}_date", tomorrow)
         setattr(state, f"{med_type}_status", 'pending')
         db.session.commit()
@@ -291,7 +309,7 @@ def handle_postback(event):
             event.reply_token,
             TextSendMessage(text=f"{Medicine[med_type]}的下次提醒時間設為隔日 {tomorrow.strftime('%Y/%m/%d')} 送出提醒"))
 
-# --------------------------- 入口 ---------------------------    
+# --------------------------- 入口 ---------------------------
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()          # 確保資料表存在
